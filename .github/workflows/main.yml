@@ -21,12 +21,23 @@ jobs:
   build:
     runs-on: macos-15-intel
     steps:
+      # ШАГ-ЗАГЛУШКА: подменяем логику Git для экшена, чтобы убрать fatal-ошибку 'No url found'
+      - name: Overwrite broken submodule behavior
+        run: |
+          mkdir -p /usr/local/bin
+          echo '#!/bin/bash' > /usr/local/bin/git-submodule-stub
+          echo 'if [[ "$*" == *"submodule foreach"* ]]; then exit 0; fi' >> /usr/local/bin/git-submodule-stub
+          echo '/usr/bin/git "$@"' >> /usr/local/bin/git-submodule-stub
+          chmod +x /usr/local/bin/git-submodule-stub
+          
+          # Создаем функцию-перехватчик для подмены вызова git во время сессии экшена
+          echo "git() { if [[ \"\$*\" == *\"submodule foreach\"* ]]; then return 0; else /usr/bin/git \"\$@\"; fi; }" >> $GITHUB_ENV
+
       - name: Checkout main repo
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          # ПРИНУДИТЕЛЬНО ОТКЛЮЧАЕМ РАБОТУ С ПОДМОДУЛЯМИ НА ЭТАПЕ АВТОРИЗАЦИИ:
           submodules: false
           persist-credentials: false
 
@@ -61,10 +72,8 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
-          # Генерируем конфигурацию Theos для Swift Package Manager
           make spm
           
-          # Выполняем динамический поиск оригинального скрипта сборки
           SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
           if [ -n "$SCRIPT_PATH" ]; then
             chmod +x "$SCRIPT_PATH"
