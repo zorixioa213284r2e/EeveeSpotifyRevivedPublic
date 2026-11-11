@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    # Используем актуальный Intel-раннер macOS 15, чтобы обойти дефицит arm64 машин
+    # Используем стабильный Intel-раннер macOS 15
     runs-on: macos-15-intel
     steps:
       - name: Checkout
@@ -28,7 +28,6 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          # Убрали рекурсивные подмодули здесь, чтобы Git не падал на Tools/SwiftProtobufBuild
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -44,10 +43,10 @@ jobs:
       - name: Install build tools
         run: |
           brew install make dpkg ldid wget
-          # GNU Make for parallel builds
+          # GNU Make для параллельной сборки
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
-          # cyan + ipapatch for IPA injection (our sideload pipeline)
-          python3 -m pip install --upgrade pyzule-rw ipapatch
+          # Добавляем флаг --break-system-packages, чтобы обойти защиту PEP 668 на macOS 15
+          python3 -m pip install --upgrade pyzule-rw ipapatch --break-system-packages
 
       - name: Build EeveeSwiftProtobuf.framework from source
         env:
@@ -111,8 +110,6 @@ jobs:
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
           [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
 
-          # cyan: -du strips appex/Watch (we don't have a wildcard profile),
-          # -m 15.0 sets MinimumOSVersion floor, -c 9 max compression.
           cyan -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
