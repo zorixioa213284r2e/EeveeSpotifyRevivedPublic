@@ -58,18 +58,23 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
-          # Генерируем необходимую конфигурацию Theos для Swift Package Manager
           make spm
           
-          # Выполняем гибкий поиск оригинального скрипта сборки
+          # Пытаемся найти локальный скрипт сборщика фреймворка
           SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
-          if [ -n "$SCRIPT_PATH" ]; then
-            chmod +x "$SCRIPT_PATH"
-            "$SCRIPT_PATH"
-          else
-            echo "::warning::build-eeveeswiftprotobuf.sh not found, trying swift build..."
-            swift build -c release
+          
+          # Если его нет (папка пуста), скачиваем оригинальный рабочий скрипт компиляции из апстрима
+          if [ -z "$SCRIPT_PATH" ]; then
+            echo "Local build script not found. Fetching clean compiler from upstream..."
+            mkdir -p Tools/SwiftProtobufBuild
+            wget -q "https://githubusercontent.com" -O Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
+            SCRIPT_PATH="Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh"
           fi
+          
+          chmod +x "$SCRIPT_PATH"
+          
+          # Запускаем сборку фреймворка под целевую архитектуру iOS (iphoneos)
+          xcrun --sdk iphoneos "$SCRIPT_PATH" || "$SCRIPT_PATH"
 
       - name: Build .deb (rootless)
         run: |
