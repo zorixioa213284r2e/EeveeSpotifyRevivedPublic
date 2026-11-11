@@ -21,12 +21,22 @@ jobs:
   build:
     runs-on: macos-15-intel
     steps:
+      # Запускаем предварительную очистку кэша подмодулей, чтобы экшен checkout не спотыкался на старых индексах
+      - name: Pre-clean broken git index
+        run: |
+          mkdir -p ${{ github.workspace }}
+          cd ${{ github.workspace }}
+          git init || true
+          git config --local --unset-all submodule.Tools/SwiftProtobufBuild.url 2>/dev/null || true
+          git rm --cached Tools/SwiftProtobufBuild 2>/dev/null || true
+          rm -rf .gitmodules .git/modules/Tools/SwiftProtobufBuild 2>/dev/null || true
+
       - name: Checkout main repo
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          # Запрещаем сохранять авторизацию, чтобы фаза Post job cleanup не лезла в подмодули и не выдавала ошибку
+          # Полностью отключаем встроенную постобработку токенов подмодулей, убирая фатальную ошибку
           persist-credentials: false
 
       - name: Setup Xcode version
@@ -41,7 +51,6 @@ jobs:
           path: ${{ github.workspace }}/theos
           submodules: recursive
 
-      # Скачиваем Azule официальным экшеном в изолированную папку
       - name: Download Azule tool
         uses: actions/checkout@v4
         with:
@@ -53,7 +62,6 @@ jobs:
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Настраиваем права на запуск Azule из локальной папки
           chmod +x ${{ github.workspace }}/Azule-src/azule
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/azule
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/cyan || true
@@ -62,13 +70,10 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
-          # Пытаемся восстановить подмодуль компилятора SwiftProtobuf, если он настроен
-          git submodule update --init --force --recursive Tools/SwiftProtobufBuild || true
-          
-          # Генерируем конфигурацию Theos для Swift Package Manager
+          # Инициализируем конфигурацию Theos для Swift Package Manager
           make spm
           
-          # Выполняем гибкий поиск оригинального скрипта сборки
+          # Выполняем динамический поиск оригинального скрипта сборки
           SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
           if [ -n "$SCRIPT_PATH" ]; then
             chmod +x "$SCRIPT_PATH"
