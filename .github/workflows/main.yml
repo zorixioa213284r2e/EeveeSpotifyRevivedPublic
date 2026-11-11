@@ -55,8 +55,13 @@ jobs:
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
+        env:
+          THEOS: ${{ github.workspace }}/theos
         run: |
-          # Проверяем, где именно лежит скрипт сборки, и запускаем его динамически
+          # Генерируем необходимую конфигурацию Theos для Swift Package Manager
+          make spm
+          
+          # Выполняем гибкий поиск оригинального скрипта сборки
           SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
           if [ -n "$SCRIPT_PATH" ]; then
             chmod +x "$SCRIPT_PATH"
