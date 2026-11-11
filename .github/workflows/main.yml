@@ -58,23 +58,22 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
+          # Принудительно восстанавливаем только нужные локальные подмодули проекта, минуя общие сетевые баги
+          git submodule update --init --force --recursive Tools/SwiftProtobufBuild || true
+          
+          # Генерируем конфигурацию Theos для Swift Package Manager
           make spm
           
-          # Пытаемся найти локальный скрипт сборщика фреймворка
+          # Проверяем пути к скрипту после восстановления модулей
           SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
           
-          # Если его нет (папка пуста), скачиваем оригинальный рабочий скрипт компиляции из апстрима
-          if [ -z "$SCRIPT_PATH" ]; then
-            echo "Local build script not found. Fetching clean compiler from upstream..."
-            mkdir -p Tools/SwiftProtobufBuild
-            wget -q "https://githubusercontent.com" -O Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
-            SCRIPT_PATH="Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh"
+          if [ -n "$SCRIPT_PATH" ]; then
+            chmod +x "$SCRIPT_PATH"
+            # Запускаем сборку фреймворка под целевую архитектуру iOS
+            xcrun --sdk iphoneos "$SCRIPT_PATH" || "$SCRIPT_PATH"
+          else
+            echo "::error::Скрипт сборки фреймворка не найден. Попытка прямой компиляции твика..."
           fi
-          
-          chmod +x "$SCRIPT_PATH"
-          
-          # Запускаем сборку фреймворка под целевую архитектуру iOS (iphoneos)
-          xcrun --sdk iphoneos "$SCRIPT_PATH" || "$SCRIPT_PATH"
 
       - name: Build .deb (rootless)
         run: |
