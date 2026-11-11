@@ -26,6 +26,8 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
+          # Запрещаем сохранять авторизацию, чтобы фаза Post job cleanup не лезла в подмодули и не выдавала ошибку
+          persist-credentials: false
 
       - name: Setup Xcode version
         uses: maxim-lobanov/setup-xcode@v1
@@ -39,6 +41,7 @@ jobs:
           path: ${{ github.workspace }}/theos
           submodules: recursive
 
+      # Скачиваем Azule официальным экшеном в изолированную папку
       - name: Download Azule tool
         uses: actions/checkout@v4
         with:
@@ -50,6 +53,7 @@ jobs:
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
+          # Настраиваем права на запуск Azule из локальной папки
           chmod +x ${{ github.workspace }}/Azule-src/azule
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/azule
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/cyan || true
@@ -58,21 +62,20 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
-          # Принудительно восстанавливаем только нужные локальные подмодули проекта, минуя общие сетевые баги
+          # Пытаемся восстановить подмодуль компилятора SwiftProtobuf, если он настроен
           git submodule update --init --force --recursive Tools/SwiftProtobufBuild || true
           
           # Генерируем конфигурацию Theos для Swift Package Manager
           make spm
           
-          # Проверяем пути к скрипту после восстановления модулей
+          # Выполняем гибкий поиск оригинального скрипта сборки
           SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
-          
           if [ -n "$SCRIPT_PATH" ]; then
             chmod +x "$SCRIPT_PATH"
-            # Запускаем сборку фреймворка под целевую архитектуру iOS
             xcrun --sdk iphoneos "$SCRIPT_PATH" || "$SCRIPT_PATH"
           else
-            echo "::error::Скрипт сборки фреймворка не найден. Попытка прямой компиляции твика..."
+            echo "::warning::build-eeveeswiftprotobuf.sh not found, trying swift build..."
+            swift build -c release
           fi
 
       - name: Build .deb (rootless)
