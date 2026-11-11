@@ -20,8 +20,8 @@ env:
 
 jobs:
   build:
-    # Заменяем macos-latest (ARM64) на macos-13 (Intel x86_64) для обхода очередей
-    runs-on: macos-13
+    # Используем актуальный Intel-раннер macOS 15, чтобы обойти дефицит arm64 машин
+    runs-on: macos-15-intel
     steps:
       - name: Checkout
         uses: actions/checkout@v4
