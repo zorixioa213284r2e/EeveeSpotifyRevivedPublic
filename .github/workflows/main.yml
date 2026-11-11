@@ -21,22 +21,13 @@ jobs:
   build:
     runs-on: macos-15-intel
     steps:
-      # Запускаем предварительную очистку кэша подмодулей, чтобы экшен checkout не спотыкался на старых индексах
-      - name: Pre-clean broken git index
-        run: |
-          mkdir -p ${{ github.workspace }}
-          cd ${{ github.workspace }}
-          git init || true
-          git config --local --unset-all submodule.Tools/SwiftProtobufBuild.url 2>/dev/null || true
-          git rm --cached Tools/SwiftProtobufBuild 2>/dev/null || true
-          rm -rf .gitmodules .git/modules/Tools/SwiftProtobufBuild 2>/dev/null || true
-
       - name: Checkout main repo
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          # Полностью отключаем встроенную постобработку токенов подмодулей, убирая фатальную ошибку
+          # ПРИНУДИТЕЛЬНО ОТКЛЮЧАЕМ РАБОТУ С ПОДМОДУЛЯМИ НА ЭТАПЕ АВТОРИЗАЦИИ:
+          submodules: false
           persist-credentials: false
 
       - name: Setup Xcode version
@@ -70,7 +61,7 @@ jobs:
         env:
           THEOS: ${{ github.workspace }}/theos
         run: |
-          # Инициализируем конфигурацию Theos для Swift Package Manager
+          # Генерируем конфигурацию Theos для Swift Package Manager
           make spm
           
           # Выполняем динамический поиск оригинального скрипта сборки
