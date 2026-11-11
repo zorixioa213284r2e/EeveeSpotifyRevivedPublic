@@ -16,7 +16,6 @@ on:
 
 env:
   THEOS: ${{ github.workspace }}/theos
-  SWIFTPROTOBUF_VERSION: "1.29.0"
 
 jobs:
   build:
@@ -40,27 +39,19 @@ jobs:
           path: ${{ github.workspace }}/theos
           submodules: recursive
 
-      # Скачиваем pyzule через официальный экшен во временную папку, чтобы у pip не поехала строка адреса
-      - name: Download pyzule source
-        uses: actions/checkout@v4
-        with:
-          repository: asdfzxcvbn/pyzule
-          path: ${{ github.workspace }}/pyzule-src
-
       - name: Install build tools
         run: |
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Локальная установка pyzule из скачанной папки — никаких сетевых ошибок git у pip!
-          python3 -m pip install ./pyzule-src --break-system-packages
-          
-          # Создаем алиас cyan для внутренних скриптов, если они его используют
-          sudo ln -sf $(which pyzule) /usr/local/bin/cyan || true
+          # Скачиваем легковесный инструмент инъекции Azule (вместо проблемного pyzule)
+          git clone https://github.com $RUNNER_TEMP/Azule
+          chmod +x $RUNNER_TEMP/Azule/azule
+          sudo ln -sf $RUNNER_TEMP/Azule/azule /usr/local/bin/azule
+          # Создаем алиас cyan на случай, если его ищут внутренние shell-скрипты
+          sudo ln -sf $RUNNER_TEMP/Azule/azule /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
-        env:
-          SWIFTPROTOBUF_VERSION: ${{ env.SWIFTPROTOBUF_VERSION }}
         run: |
           chmod +x Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
           Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
@@ -98,7 +89,7 @@ jobs:
           chmod +x Tools/build-zxpi.sh
           Tools/build-zxpi.sh
 
-      - name: Inject deb + framework into IPA (pyzule)
+      - name: Inject deb + framework into IPA (Azule)
         if: ${{ inputs.ipa_url != '' }}
         run: |
           mkdir -p Outputs/IPAS
@@ -116,14 +107,14 @@ jobs:
           EEVEE_VERSION=$(grep -E '^Version:' control | awk '{print $2}')
           OUT="Outputs/IPAS/EeveeSpotify-${EEVEE_VERSION}-${SPOT_VERSION}.ipa"
 
-          INJECT=("$DYLIB_SRC")
-          [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
-          [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
+          # Подготавливаем список файлов для инъекции через Azule
+          INJECT_FILES=("$DYLIB_SRC")
+          [ -n "$FRAMEWORK_SRC" ] && INJECT_FILES+=("$FRAMEWORK_SRC")
+          [ -n "$BUNDLE_SRC" ]    && INJECT_FILES+=("$BUNDLE_SRC")
+          [ -f "packages/zxPluginsInject.dylib" ] && INJECT_FILES+=("packages/zxPluginsInject.dylib")
 
-          [ -f "packages/zxPluginsInject.dylib" ] && INJECT+=("packages/zxPluginsInject.dylib")
-
-          pyzule -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
-               -f "${INJECT[@]}" -c 9 -m 15.0 -du
+          # Нативный вызов инжектора Azule: -i входной, -o выходной, -f файлы для инъекции
+          azule -i ${{ github.workspace }}/spotify.ipa -o "$OUT" -f "${INJECT_FILES[@]}"
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
 
       - name: Strip Watch app (if any survived)
