@@ -28,7 +28,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
-          submodules: recursive
+          # Убрали рекурсивные подмодули здесь, чтобы Git не падал на Tools/SwiftProtobufBuild
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
