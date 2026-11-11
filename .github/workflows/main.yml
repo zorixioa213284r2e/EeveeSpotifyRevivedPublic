@@ -44,11 +44,10 @@ jobs:
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Явно разделяем установку Git-пакета и обычных утилит PyPI через отдельные команды
-          python3 -m pip install ipapatch --break-system-packages
+          # Устанавливаем pyzule из исходников. ipapatch убран, так как pyzule заменяет его функционал.
           python3 -m pip install git+https://github.com --break-system-packages
           
-          # Создаем системные ссылки для полной обратной совместимости с вызовами cyan
+          # Системная ссылка для совместимости, если утилита cyan вызывается из внутренних скриптов
           sudo ln -sf $(which pyzule) /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
@@ -91,7 +90,7 @@ jobs:
           chmod +x Tools/build-zxpi.sh
           Tools/build-zxpi.sh
 
-      - name: Inject deb + framework into IPA (cyan)
+      - name: Inject deb + framework into IPA (pyzule)
         if: ${{ inputs.ipa_url != '' }}
         run: |
           mkdir -p Outputs/IPAS
@@ -113,15 +112,12 @@ jobs:
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
           [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
 
+          # Внедряем как основные компоненты твика, так и вспомогательный zxPluginsInject.dylib за один проход через pyzule
+          [ -f "packages/zxPluginsInject.dylib" ] && INJECT+=("packages/zxPluginsInject.dylib")
+
           pyzule -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
-
-      - name: LC-inject zxPluginsInject (ipapatch)
-        if: ${{ inputs.ipa_url != '' }}
-        run: |
-          ipapatch --input "$OUT_IPA" --inplace --noconfirm \
-                   --dylib packages/zxPluginsInject.dylib
 
       - name: Strip Watch app (if any survived)
         if: ${{ inputs.ipa_url != '' }}
