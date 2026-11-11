@@ -44,12 +44,11 @@ jobs:
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Устанавливаем pyzule напрямую из официального репозитория автора
-          python3 -m pip install git+https://github.com ipapatch --break-system-packages
+          # Явно разделяем установку Git-пакета и обычных утилит PyPI через отдельные команды
+          python3 -m pip install ipapatch --break-system-packages
+          python3 -m pip install git+https://github.com --break-system-packages
           
-          # Создаем алиас cyan для совместимости со старыми командами в вашем скрипте
-          echo "alias cyan='pyzule'" >> ~/.bash_profile
-          echo "alias cyan='pyzule'" >> ~/.zshrc
+          # Создаем системные ссылки для полной обратной совместимости с вызовами cyan
           sudo ln -sf $(which pyzule) /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
@@ -114,7 +113,6 @@ jobs:
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
           [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
 
-          # Используем pyzule вместо старого вызова cyan
           pyzule -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
