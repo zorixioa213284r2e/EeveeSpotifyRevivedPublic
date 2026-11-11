@@ -39,17 +39,22 @@ jobs:
           path: ${{ github.workspace }}/theos
           submodules: recursive
 
+      # Скачиваем Azule официальным экшеном в изолированную папку
+      - name: Download Azule tool
+        uses: actions/checkout@v4
+        with:
+          repository: Al4ise/Azule
+          path: ${{ github.workspace }}/Azule-src
+
       - name: Install build tools
         run: |
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Скачиваем легковесный инструмент инъекции Azule (вместо проблемного pyzule)
-          git clone https://github.com $RUNNER_TEMP/Azule
-          chmod +x $RUNNER_TEMP/Azule/azule
-          sudo ln -sf $RUNNER_TEMP/Azule/azule /usr/local/bin/azule
-          # Создаем алиас cyan на случай, если его ищут внутренние shell-скрипты
-          sudo ln -sf $RUNNER_TEMP/Azule/azule /usr/local/bin/cyan || true
+          # Настраиваем права на запуск Azule из локальной папки
+          chmod +x ${{ github.workspace }}/Azule-src/azule
+          sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/azule
+          sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
         run: |
@@ -107,13 +112,11 @@ jobs:
           EEVEE_VERSION=$(grep -E '^Version:' control | awk '{print $2}')
           OUT="Outputs/IPAS/EeveeSpotify-${EEVEE_VERSION}-${SPOT_VERSION}.ipa"
 
-          # Подготавливаем список файлов для инъекции через Azule
           INJECT_FILES=("$DYLIB_SRC")
           [ -n "$FRAMEWORK_SRC" ] && INJECT_FILES+=("$FRAMEWORK_SRC")
           [ -n "$BUNDLE_SRC" ]    && INJECT_FILES+=("$BUNDLE_SRC")
           [ -f "packages/zxPluginsInject.dylib" ] && INJECT_FILES+=("packages/zxPluginsInject.dylib")
 
-          # Нативный вызов инжектора Azule: -i входной, -o выходной, -f файлы для инъекции
           azule -i ${{ github.workspace }}/spotify.ipa -o "$OUT" -f "${INJECT_FILES[@]}"
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
 
