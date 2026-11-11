@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Запускать из корня локального клона репозитория.
-# Скрипт: 1) удаляет битый сабмодуль Tools/SwiftProtobufBuild,
-#         2) переписывает workflow, 3) делает один коммит и пуш.
+# Делает: 1) чинит .gitmodules и убирает битый сабмодуль,
+#         2) удаляет лишний build-deb-ipa.yml, если он был создан,
+#         3) переписывает .github/workflows/main.yml,
+#         4) делает один коммит и пуш.
 set -euo pipefail
 
 SUB_PATH="Tools/SwiftProtobufBuild"
-WF_PATH=".github/workflows/build-deb-ipa.yml"   # замените, если ваш файл называется иначе
+WF_PATH=".github/workflows/main.yml"
+EXTRA_WF=".github/workflows/build-deb-ipa.yml"
 
 # ─── 1. Чиним .gitmodules ────────────────────────────────────────────
 if [ -f .gitmodules ] && git config -f .gitmodules --get "submodule.${SUB_PATH}.path" >/dev/null 2>&1; then
@@ -13,23 +16,29 @@ if [ -f .gitmodules ] && git config -f .gitmodules --get "submodule.${SUB_PATH}.
   echo "Запись сабмодуля удалена из .gitmodules"
 fi
 if [ -f .gitmodules ] && [ ! -s .gitmodules ]; then
-  git rm -q -f .gitmodules
+  git rm -q -f .gitmodules 2>/dev/null || rm -f .gitmodules
   echo ".gitmodules пуст и удалён"
 fi
 
 # ─── 2. Убираем gitlink (сабмодуль) из индекса, файлы оставляем ──────
-if git ls-tree HEAD "$SUB_PATH" | grep -q '^160000'; then
+if git ls-tree HEAD "$SUB_PATH" 2>/dev/null | grep -q '^160000'; then
   git rm -q --cached "$SUB_PATH"
   echo "Gitlink $SUB_PATH убран из индекса"
 fi
 if [ -e "$SUB_PATH/.git" ]; then
-  rm -rf "$SUB_PATH/.git"   # вложенный .git иначе снова превратит папку в сабмодуль
+  rm -rf "$SUB_PATH/.git"
 fi
 if [ -d "$SUB_PATH" ]; then
   git add -A "$SUB_PATH"
 fi
 
-# ─── 3. Записываем исправленный workflow ─────────────────────────────
+# ─── 3. Удаляем лишний workflow, если он был создан раньше ───────────
+if [ -f "$EXTRA_WF" ]; then
+  git rm -q -f "$EXTRA_WF" 2>/dev/null || rm -f "$EXTRA_WF"
+  echo "Удалён лишний файл $EXTRA_WF"
+fi
+
+# ─── 4. Записываем исправленный main.yml ─────────────────────────────
 mkdir -p "$(dirname "$WF_PATH")"
 cat > "$WF_PATH" <<'EOF'
 name: Build rootless deb and inject into IPA
@@ -224,14 +233,15 @@ jobs:
 EOF
 echo "Workflow записан: $WF_PATH"
 
-# ─── 4. Коммит и пуш ─────────────────────────────────────────────────
+# ─── 5. Коммит и пуш ─────────────────────────────────────────────────
 git add -A .gitmodules 2>/dev/null || true
 git add -A "$WF_PATH"
+git add -A "$EXTRA_WF" 2>/dev/null || true
 
 if git diff --cached --quiet; then
   echo "Изменений для коммита нет"
 else
   git commit -m "Fix broken submodule and rewrite build workflow"
   git push
-  echo "Готово: изменения отправлены"
+  echo "Готово: изменения отправлены. Запустите Actions → Run workflow."
 fi
