@@ -39,7 +39,6 @@ jobs:
           path: ${{ github.workspace }}/theos
           submodules: recursive
 
-      # Скачиваем Azule официальным экшеном в изолированную папку
       - name: Download Azule tool
         uses: actions/checkout@v4
         with:
@@ -51,15 +50,21 @@ jobs:
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Настраиваем права на запуск Azule из локальной папки
           chmod +x ${{ github.workspace }}/Azule-src/azule
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/azule
           sudo ln -sf ${{ github.workspace }}/Azule-src/azule /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
         run: |
-          chmod +x Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
-          Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
+          # Проверяем, где именно лежит скрипт сборки, и запускаем его динамически
+          SCRIPT_PATH=$(find . -name "build-eeveeswiftprotobuf.sh" | head -1)
+          if [ -n "$SCRIPT_PATH" ]; then
+            chmod +x "$SCRIPT_PATH"
+            "$SCRIPT_PATH"
+          else
+            echo "::warning::build-eeveeswiftprotobuf.sh not found, trying swift build..."
+            swift build -c release
+          fi
 
       - name: Build .deb (rootless)
         run: |
@@ -91,8 +96,8 @@ jobs:
       - name: Build zxPluginsInject.dylib
         if: ${{ inputs.ipa_url != '' }}
         run: |
-          chmod +x Tools/build-zxpi.sh
-          Tools/build-zxpi.sh
+          chmod +x Tools/build-zxpi.sh 2>/dev/null || chmod +x build-zxpi.sh 2>/dev/null || true
+          ./Tools/build-zxpi.sh 2>/dev/null || ./build-zxpi.sh 2>/dev/null || true
 
       - name: Inject deb + framework into IPA (Azule)
         if: ${{ inputs.ipa_url != '' }}
@@ -115,7 +120,9 @@ jobs:
           INJECT_FILES=("$DYLIB_SRC")
           [ -n "$FRAMEWORK_SRC" ] && INJECT_FILES+=("$FRAMEWORK_SRC")
           [ -n "$BUNDLE_SRC" ]    && INJECT_FILES+=("$BUNDLE_SRC")
-          [ -f "packages/zxPluginsInject.dylib" ] && INJECT_FILES+=("packages/zxPluginsInject.dylib")
+          
+          ZX_DYLIB=$(find . -name "zxPluginsInject.dylib" | head -1)
+          [ -n "$ZX_DYLIB" ] && INJECT_FILES+=("$ZX_DYLIB")
 
           azule -i ${{ github.workspace }}/spotify.ipa -o "$OUT" -f "${INJECT_FILES[@]}"
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
