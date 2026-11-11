@@ -22,32 +22,40 @@ jobs:
   build:
     runs-on: macos-15-intel
     steps:
-      - name: Checkout
+      - name: Checkout main repo
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 0
 
-      - uses: maxim-lobanov/setup-xcode@v1
+      - name: Setup Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '16.2.0'
 
-      - name: Setup Theos
+      - name: Setup Theos build suite
         uses: actions/checkout@v4
         with:
           repository: theos/theos
           path: ${{ github.workspace }}/theos
           submodules: recursive
 
+      # Скачиваем pyzule через официальный экшен во временную папку, чтобы у pip не поехала строка адреса
+      - name: Download pyzule source
+        uses: actions/checkout@v4
+        with:
+          repository: asdfzxcvbn/pyzule
+          path: ${{ github.workspace }}/pyzule-src
+
       - name: Install build tools
         run: |
           brew install make dpkg ldid wget
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
           
-          # Установка разделена на две независимые и изолированные строки с кавычками
-          python3 -m pip install "git+https://github.com" --break-system-packages
+          # Локальная установка pyzule из скачанной папки — никаких сетевых ошибок git у pip!
+          python3 -m pip install ./pyzule-src --break-system-packages
           
-          # Проверяем, создался ли исполняемый файл pyzule перед тем, как делать линк
+          # Создаем алиас cyan для внутренних скриптов, если они его используют
           sudo ln -sf $(which pyzule) /usr/local/bin/cyan || true
 
       - name: Build EeveeSwiftProtobuf.framework from source
