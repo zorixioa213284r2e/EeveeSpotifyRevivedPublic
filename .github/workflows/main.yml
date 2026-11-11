@@ -20,7 +20,8 @@ env:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Заменяем macos-latest (ARM64) на macos-13 (Intel x86_64) для обхода очередей
+    runs-on: macos-13
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -101,6 +102,7 @@ jobs:
           FRAMEWORK_SRC=$(find "$DEB_EXTRACT" -type d -name 'EeveeSwiftProtobuf.framework' | head -1)
 
           SPOT_VERSION=$(unzip -p ${{ github.workspace }}/spotify.ipa 'Payload/Spotify.app/Info.plist' \
+
               | plutil -extract CFBundleShortVersionString raw - 2>/dev/null || echo "unknown")
           EEVEE_VERSION=$(grep -E '^Version:' control | awk '{print $2}')
           OUT="Outputs/IPAS/EeveeSpotify-${EEVEE_VERSION}-${SPOT_VERSION}.ipa"
