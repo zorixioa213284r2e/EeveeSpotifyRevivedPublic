@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    # Используем стабильный Intel-раннер macOS 15
+    # Используем актуальный Intel-раннер macOS 15, чтобы обойти дефицит arm64 машин
     runs-on: macos-15-intel
     steps:
       - name: Checkout
@@ -45,8 +45,8 @@ jobs:
           brew install make dpkg ldid wget
           # GNU Make для параллельной сборки
           echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
-          # Добавляем флаг --break-system-packages, чтобы обойти защиту PEP 668 на macOS 15
-          python3 -m pip install --upgrade pyzule-rw ipapatch --break-system-packages
+          # Исправлено имя pyzule-rw на pyzule и добавлен флаг --break-system-packages
+          python3 -m pip install --upgrade pyzule ipapatch --break-system-packages
 
       - name: Build EeveeSwiftProtobuf.framework from source
         env:
@@ -110,6 +110,7 @@ jobs:
           [ -n "$FRAMEWORK_SRC" ] && INJECT+=("$FRAMEWORK_SRC")
           [ -n "$BUNDLE_SRC" ]    && INJECT+=("$BUNDLE_SRC")
 
+          # cyan: -du strips appex/Watch, -m 15.0 sets MinimumOSVersion, -c 9 max compression.
           cyan -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
                -f "${INJECT[@]}" -c 9 -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
